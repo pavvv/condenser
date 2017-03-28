@@ -8,7 +8,6 @@ import ServerHTML from "../server-html";
 import sendEmail from "../sendEmail";
 import { getRemoteIp, checkCSRF } from "server/utils/misc";
 import config from "config";
-import SignupProgressBar from "app/components/elements/SignupProgressBar";
 import MiniHeader from "app/components/modules/MiniHeader";
 // import secureRandom from "secure-random";
 import Mixpanel from "mixpanel";
@@ -303,10 +302,6 @@ export default function useEnterAndConfirmEmailPages(app) {
         const body = renderToString(
             <div className="App">
                 <MiniHeader />
-                <SignupProgressBar
-                    steps={["email", "steem account", "phone"]}
-                    current={1}
-                />
                 <br />
                 <div className="row" style={{ maxWidth: "32rem" }}>
                     <div className="column">

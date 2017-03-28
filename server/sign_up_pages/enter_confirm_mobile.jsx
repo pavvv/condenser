@@ -4,9 +4,8 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import models from "db/models";
 import ServerHTML from "server/server-html";
-import teleSignVerify from "server/utils/teleSign";
 import twilioVerify from "server/utils/twilio";
-import SignupProgressBar from "app/components/elements/SignupProgressBar";
+import teleSignVerify from "server/utils/teleSign";
 import CountryCode from "app/components/elements/CountryCode";
 import { getRemoteIp, checkCSRF } from "server/utils/misc";
 import MiniHeader from "app/components/modules/MiniHeader";
@@ -154,7 +153,7 @@ export default function useEnterAndConfirmMobilePages(app) {
                 <br />
                 <div className="row" style={{ maxWidth: "32rem" }}>
                     <div className="column">
-                        <Progress meter={{ text: '90%' }} tabIndex="0" value={90} max={100} />
+                        <Progress tabIndex="0" value={90} max={100} />
                         <form
                             className="column"
                             action="/submit_mobile"
@@ -304,13 +303,13 @@ export default function useEnterAndConfirmMobilePages(app) {
                 yield mid.update({ verified: false, phone });
             }
             const seconds_ago = (Date.now() - mid.updated_at) / 1000.0;
-            if (seconds_ago < 120) {
-                this.flash = {
-                    error: "Confirmation was attempted a moment ago. You can attempt verification again in 2 minutes."
-                };
-                this.redirect(enterMobileUrl);
-                return;
-            }
+            // if (seconds_ago < 120) {
+            //     this.flash = {
+            //         error: "Confirmation was attempted a moment ago. You can attempt verification again in 2 minutes."
+            //     };
+            //     this.redirect(enterMobileUrl);
+            //     return;
+            // }
             yield mid.update({ confirmation_code, phone });
         } else {
             // mid = yield models.Identity.create({
@@ -347,6 +346,9 @@ export default function useEnterAndConfirmMobilePages(app) {
             ip,
             ignore_score: twilioResult === 'pass'
         });
+
+        console.log('-- /submit_mobile teleSignResult -->', verifyResult);
+
         if (verifyResult && verifyResult.score) {
             mid.update({score: verifyResult.score});
         }
@@ -359,13 +361,10 @@ export default function useEnterAndConfirmMobilePages(app) {
         const body = renderToString(
             <div className="App">
                 <MiniHeader />
-                <SignupProgressBar
-                    steps={["email", "steem account", "phone"]}
-                    current={2}
-                />
                 <br />
                 <div className="row" style={{ maxWidth: "32rem" }}>
                     <div className="column">
+                    <Progress tabIndex="0" value={90} max={100} />
                         Thank you for providing your phone number (
                         {phone}
                         ).
