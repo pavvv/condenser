@@ -35,9 +35,18 @@
   circle {
     stroke: #4BA2F2;
   }
-  .Icon:hover {
-    box-shadow: 0 0 0 rgba(75, 162, 242, 1);
-    animation: pulse 2s infinite;
+  // for now only show pulse on chrome/firefox.
+  @-moz-document url-prefix() {
+    .Icon:hover {
+        box-shadow: 0 0 0 rgba(75, 162, 242, 1);
+        animation: pulse 2s infinite;
+    }
+  }
+  @media all and (-webkit-min-device-pixel-ratio:0) and (min-resolution: .001dpcm) {
+    .Icon:hover {
+        box-shadow: 0 0 0 rgba(75, 162, 242, 1);
+        animation: pulse 2s infinite;
+    }
   }
 }
 
