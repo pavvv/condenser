@@ -6,12 +6,13 @@ import { renderToString } from "react-dom/server";
 import models from "db/models";
 import ServerHTML from "../server-html";
 import sendEmail from "../sendEmail";
-import { checkCSRF, getRemoteIp } from "server/utils/misc";
+import { getRemoteIp, checkCSRF } from "server/utils/misc";
 import config from "config";
 import SignupProgressBar from "app/components/elements/SignupProgressBar";
 import MiniHeader from "app/components/modules/MiniHeader";
-import secureRandom from "secure-random";
+// import secureRandom from "secure-random";
 import Mixpanel from "mixpanel";
+import Progress from 'react-foundation-components/lib/global/progress-bar';
 
 // FIXME copy paste code, refactor mixpanel out
 var mixpanel = null;
@@ -27,7 +28,6 @@ if (process.env.NODE_ENV === "production") {
 const assets = Object.assign({}, require(assets_file), { script: [] });
 
 assets.script.push("https://www.google.com/recaptcha/api.js");
-assets.script.push("/enter_email/submit_form.js");
 
 function* confirmEmailHandler() {
     const confirmation_code = this.params && this.params.code
@@ -52,7 +52,7 @@ function* confirmEmailHandler() {
     if (eid.verified) {
         this.session.user = eid.user_id; // session recovery (user changed browsers)
         this.flash = { success: "Email has already been verified" };
-        this.redirect("/enter_mobile");
+        this.redirect("/create_account");
         return;
     }
     const hours_ago = (Date.now() - eid.updated_at) / 1000.0 / 3600.0;
@@ -68,24 +68,26 @@ function* confirmEmailHandler() {
         where: { id: eid.user_id }
     });
 
+    this.redirect("/create_account");
+
     // check if the phone is confirmed then redirect to create account - this is useful when we invite users and send them the link
-    const mid = yield models.Identity.findOne({
-        attributes: ["verified"],
-        where: { user_id: eid.user_id, provider: "phone" },
-        order: "id DESC"
-    });
-    if (mid && mid.verified) {
-        this.redirect("/create_account");
-    } else {
-        this.redirect("/enter_mobile");
-    }
+    // const mid = yield models.Identity.findOne({
+    //     attributes: ["verified"],
+    //     where: { user_id: eid.user_id, provider: "phone" },
+    //     order: "id DESC"
+    // });
+    // if (mid && mid.verified) {
+    //     this.redirect("/create_account");
+    // } else {
+    //     this.redirect("/enter_mobile");
+    // }
 }
 
 export default function useEnterAndConfirmEmailPages(app) {
     const router = koa_router();
     app.use(router.routes());
     const koaBody = koa_body();
-    const rc_site_key = config.get('recaptcha.site_key');
+    const rc_site_key = config.get("recaptcha.site_key");
 
     router.get("/enter_email", function*() {
         console.log("-- /enter_email -->", this.session.uid, this.session.user);
@@ -96,15 +98,12 @@ export default function useEnterAndConfirmEmailPages(app) {
         const body = renderToString(
             <div className="App">
                 <MiniHeader />
-                <SignupProgressBar
-                    steps={["email", "phone", "steem account"]}
-                    current={1}
-                />
                 <br />
                 <div className="row" style={{ maxWidth: "32rem" }}>
                     <div className="column">
-                        <form id="submit_email" action="/submit_email" method="POST">
-                            <h4>
+                        <Progress tabIndex="0" value={50} max={100} />
+                        <form action="/submit_email" method="POST">
+                            <h4 style={{ color: "#4078c0" }}>
                                 Please provide your email address to continue the registration process
                             </h4>
                             <p className="secondary">
@@ -117,6 +116,8 @@ export default function useEnterAndConfirmEmailPages(app) {
                             />
                             <label>
                                 Email
+
+
                                 <input
                                     type="email"
                                     name="email"
@@ -124,30 +125,29 @@ export default function useEnterAndConfirmEmailPages(app) {
                                 />
                             </label>
                             <br />
+                            {/*<div*/}
+                            {/*className="g-recaptcha"*/}
+                            {/*data-sitekey={rc_site_key}*/}
+                            {/*/>*/}
+                            {/*<br />*/}
                             <div className="error">
                                 {this.flash.error}
                             </div>
-                            {rc_site_key ? <button
-                                    className="button g-recaptcha"
-                                    data-sitekey={rc_site_key}
-                                    data-callback="submit_email_form">
-                                    CONTINUE
-                                </button> :
-                                <input
-                                    type="submit"
-                                    className="button"
-                                    value="CONTINUE" />
-                            }
+                            <input
+                                type="submit"
+                                className="button"
+                                value="CONTINUE"
+                            />
                         </form>
                     </div>
                 </div>
             </div>
         );
-        const props = { body, title: 'Email Address', assets, meta: [] };
-        this.body = '<!DOCTYPE html>' +
+        const props = { body, title: "Email Address", assets, meta: [] };
+        this.body = "<!DOCTYPE html>" +
             renderToString(<ServerHTML {...props} />);
         if (mixpanel)
-            mixpanel.track('SignupStep1', { distinct_id: this.session.uid });
+            mixpanel.track("SignupStep1", { distinct_id: this.session.uid });
     });
 
     router.post("/submit_email", koaBody, function*() {
@@ -160,21 +160,19 @@ export default function useEnterAndConfirmEmailPages(app) {
             return;
         }
 
-        if (config.get('recaptcha.site_key')) {
-            if (!(yield checkRecaptcha(this))) {
-                console.log(
-                  "-- /submit_email captcha verification failed -->",
-                  user_id,
-                  this.session.uid,
-                  email,
-                  this.req.connection.remoteAddress
-                );
-                this.flash = {
-                    error: "Failed captcha verification, please try again"
-                };
-                this.redirect("/enter_email?email=" + email);
-                return;
-            }
+        if (!(yield checkRecaptcha(this))) {
+            console.log(
+                "-- /submit_email captcha verification failed -->",
+                user_id,
+                this.session.uid,
+                email,
+                this.req.connection.remoteAddress
+            );
+            this.flash = {
+                error: "Failed captcha verification, please try again"
+            };
+            this.redirect("/enter_email?email=" + email);
+            return;
         }
 
         const parsed_email = email.match(/^.+\@.*?([\w\d-]+\.\w+)$/);
@@ -203,8 +201,8 @@ export default function useEnterAndConfirmEmailPages(app) {
             this.flash = {
                 error: (
                     "Not supported email address: " +
-                        email +
-                        ". Please make sure your you don't use any temporary email providers, contact support@steemit.com for more information."
+                    email +
+                    ". Please make sure your you don't use any temporary email providers, contact support@steemit.com for more information."
                 )
             };
             this.redirect("/enter_email?email=" + email);
@@ -246,54 +244,67 @@ export default function useEnterAndConfirmEmailPages(app) {
             sendEmail("confirm_email", email, { confirmation_code });
         } else {
             let user;
-            if (user_id) {
-                user = yield models.User.findOne({
-                    attributes: ["id"],
-                    where: { id: user_id }
-                });
-            }
-            if (!user) {
-                user = yield models.User.create({
-                    uid: this.session.uid,
-                    remote_ip: getRemoteIp(this.request.req)
-                });
-                this.session.user = user_id = user.id;
-            }
-
-            const confirmation_code = secureRandom
-                .randomBuffer(13)
-                .toString("hex");
-            let eid = yield models.Identity.findOne({
-                attributes: ["id", "email"],
-                where: { user_id, provider: "email" },
-                order: "id DESC"
+            let eid;
+            user = yield models.User.findOne({
+                where: { uid: this.session.uid }
             });
-            if (eid) {
-                yield eid.update({ confirmation_code, email });
-            } else {
-                eid = yield models.Identity.create({
-                    provider: "email",
-                    user_id,
-                    uid: this.session.uid,
-                    email,
-                    verified: false,
-                    confirmation_code
-                });
-            }
-            console.log(
-                "-- /submit_email -->",
-                this.session.uid,
-                this.session.user,
-                email,
-                eid.id
-            );
-            sendEmail("confirm_email", email, { confirmation_code });
+            console.log("here I am", this.session);
+            eid = yield models.Identity.findOne({
+                where: { user_id: user.id }
+            });
+            yield eid.update({
+                email: this.request.body.email,
+                last_step: 2
+            });
+
+            // redirect to phone verification
+            this.redirect("/enter_mobile");
+            return;
+
+            // we should always have a user at this point
+            // if (!user) {
+            //     user = yield models.User.create({
+            //         uid: this.session.uid,
+            //         remote_ip: getRemoteIp(this.request.req)
+            //     });
+            //     this.session.user = user_id = user.id;
+            // }
+
+            // const confirmation_code = secureRandom
+            //     .randomBuffer(13)
+            //     .toString("hex");
+            // let eid = yield models.Identity.findOne({
+            //     attributes: ["id", "email"],
+            //     where: { user_id, provider: "email" },
+            //     order: "id DESC"
+            // });
+            // if (eid) {
+            //     yield eid.update({ confirmation_code, email });
+            // } else {
+            //     eid = yield models.Identity.create({
+            //         provider: "email",
+            //         user_id,
+            //         uid: this.session.uid,
+            //         email,
+            //         verified: false,
+            //         confirmation_code
+            //     });
+            // }
+            // console.log(eid)
+            // console.log(
+            //     "-- /submit_email -->",
+            //     this.session.uid,
+            //     this.session.user,
+            //     email,
+            //     eid.id
+            // );
+            // sendEmail("confirm_email", email, { confirmation_code });
         }
         const body = renderToString(
             <div className="App">
                 <MiniHeader />
                 <SignupProgressBar
-                    steps={["email", "phone", "steem account"]}
+                    steps={["email", "steem account", "phone"]}
                     current={1}
                 />
                 <br />
@@ -322,10 +333,6 @@ export default function useEnterAndConfirmEmailPages(app) {
 
     router.get("/confirm_email/:code", confirmEmailHandler);
     router.post("/confirm_email", koaBody, confirmEmailHandler);
-    router.get("/enter_email/submit_form.js", function*() {
-        this.type = 'application/javascript';
-        this.body = "function submit_email_form(){document.getElementById('submit_email').submit()}";
-    });
 }
 
 function* checkRecaptcha(ctx) {
